@@ -1,0 +1,10 @@
+# build outputs
+/build/
+/payload/
+
+# editor / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
