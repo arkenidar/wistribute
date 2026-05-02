@@ -1,0 +1,105 @@
+cmake_minimum_required(VERSION 3.20)
+project(wistribute LANGUAGES C)
+
+set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
+if(NOT WIN32)
+    message(FATAL_ERROR "wistribute targets Win64 only.")
+endif()
+
+# --- options -----------------------------------------------------------------
+option(WISTRIBUTE_BUILD_DOWNLOAD "Build the download-mode exe"  ON)
+option(WISTRIBUTE_BUILD_EMBEDDED "Build the embedded-mode exe"  ON)
+
+set(ZBS_URL    "https://github.com/pkulchenko/ZeroBraneStudio/archive/refs/heads/master.zip"
+    CACHE STRING "Source zip URL embedded into the offline exe")
+set(MINIZ_TAG  "3.1.1" CACHE STRING "miniz release tag to vendor")
+
+# --- vendored deps (downloaded at configure time) ----------------------------
+set(MINIZ_DIR "${CMAKE_BINARY_DIR}/_deps/miniz")
+file(MAKE_DIRECTORY "${MINIZ_DIR}")
+
+if(NOT (EXISTS "${MINIZ_DIR}/miniz.c" AND EXISTS "${MINIZ_DIR}/miniz.h"))
+    set(_miniz_zip "${MINIZ_DIR}/miniz-${MINIZ_TAG}.zip")
+    message(STATUS "Fetching miniz ${MINIZ_TAG} amalgamation zip")
+    file(DOWNLOAD
+        "https://github.com/richgel999/miniz/releases/download/${MINIZ_TAG}/miniz-${MINIZ_TAG}.zip"
+        "${_miniz_zip}"
+        SHOW_PROGRESS STATUS dl_status TLS_VERIFY ON)
+    list(GET dl_status 0 dl_code)
+    if(NOT dl_code EQUAL 0)
+        file(REMOVE "${_miniz_zip}")
+        message(FATAL_ERROR "Failed to download miniz zip: ${dl_status}")
+    endif()
+    file(ARCHIVE_EXTRACT INPUT "${_miniz_zip}" DESTINATION "${MINIZ_DIR}"
+         PATTERNS miniz.c miniz.h)
+endif()
+
+# --- payload zip for the embedded build --------------------------------------
+set(PAYLOAD_ZIP "${CMAKE_BINARY_DIR}/_deps/payload/zbs.zip")
+if(WISTRIBUTE_BUILD_EMBEDDED AND NOT EXISTS "${PAYLOAD_ZIP}")
+    message(STATUS "Fetching payload zip from ${ZBS_URL}")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/_deps/payload")
+    file(DOWNLOAD "${ZBS_URL}" "${PAYLOAD_ZIP}"
+         SHOW_PROGRESS STATUS dl_status TLS_VERIFY ON)
+    list(GET dl_status 0 dl_code)
+    if(NOT dl_code EQUAL 0)
+        file(REMOVE "${PAYLOAD_ZIP}")
+        message(FATAL_ERROR "Failed to download payload zip: ${dl_status}")
+    endif()
+endif()
+
+# --- shared sources ----------------------------------------------------------
+set(COMMON_SRC
+    src/main.c
+    src/unzip.c
+    src/gui.c
+    "${MINIZ_DIR}/miniz.c"
+    res/wistribute.rc)
+
+set(COMMON_INCLUDES src "${MINIZ_DIR}")
+set(COMMON_LIBS comctl32 shell32 ole32 uuid user32 gdi32)
+
+# Common compile flags
+add_library(wistribute_flags INTERFACE)
+target_compile_options(wistribute_flags INTERFACE
+    -municode -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -O2)
+target_link_options(wistribute_flags INTERFACE
+    -municode -mwindows -s)
+target_compile_definitions(wistribute_flags INTERFACE
+    UNICODE _UNICODE)
+
+# miniz amalgamation has many unused-function warnings — silence per-file.
+set_source_files_properties("${MINIZ_DIR}/miniz.c"
+    PROPERTIES COMPILE_FLAGS "-w")
+
+# .rc compiler needs to find the manifest by relative path
+set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -I${CMAKE_SOURCE_DIR}/res")
+
+# --- download-mode exe -------------------------------------------------------
+if(WISTRIBUTE_BUILD_DOWNLOAD)
+    add_executable(wistribute WIN32 ${COMMON_SRC} src/http.c)
+    target_include_directories(wistribute PRIVATE ${COMMON_INCLUDES})
+    target_link_libraries(wistribute PRIVATE wistribute_flags ${COMMON_LIBS} winhttp)
+    target_compile_definitions(wistribute PRIVATE MODE_DOWNLOAD)
+endif()
+
+# --- embedded-mode exe -------------------------------------------------------
+if(WISTRIBUTE_BUILD_EMBEDDED)
+    # Copy payload next to embed.c so its `#embed "../payload/zbs.zip"` works
+    # both from source-tree builds and out-of-source builds.
+    set(EMBED_PAYLOAD_DIR "${CMAKE_BINARY_DIR}/payload")
+    file(MAKE_DIRECTORY "${EMBED_PAYLOAD_DIR}")
+    configure_file("${PAYLOAD_ZIP}" "${EMBED_PAYLOAD_DIR}/zbs.zip" COPYONLY)
+
+    set(EMBED_SRC_DIR "${CMAKE_BINARY_DIR}/embed_src")
+    file(MAKE_DIRECTORY "${EMBED_SRC_DIR}")
+    configure_file("${CMAKE_SOURCE_DIR}/src/embed.c" "${EMBED_SRC_DIR}/embed.c" COPYONLY)
+
+    add_executable(wistribute-offline WIN32 ${COMMON_SRC} "${EMBED_SRC_DIR}/embed.c")
+    target_include_directories(wistribute-offline PRIVATE ${COMMON_INCLUDES})
+    target_link_libraries(wistribute-offline PRIVATE wistribute_flags ${COMMON_LIBS})
+    target_compile_definitions(wistribute-offline PRIVATE MODE_EMBEDDED)
+endif()
