@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wistribute — docs</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="wrap">
+<nav class="top">
+    <a class="brand" href="index.html">wistribute</a>
+    <a class="active" href="index.html">Overview</a>
+    <a href="build.html">Build</a>
+    <a href="usage.html">Usage</a>
+    <a href="architecture.html">Architecture</a>
+    <a href="plans/">Plans</a>
+</nav>
+
+<h1>wistribute</h1>
+<p class="lede">A single self-contained Win64 <code>.exe</code> that downloads
+ZeroBraneStudio's <code>master.zip</code> and extracts it locally — with an
+optional Win32 GUI. No DLLs, no installer, no sidecar files.</p>
+
+<div class="card">
+    <strong>Two binaries from one source tree</strong>
+    <table>
+    <tr><th>Exe</th><th>Mode</th><th>What it does</th></tr>
+    <tr><td><code>wistribute.exe</code></td><td><span class="tag">DOWNLOAD</span></td>
+        <td>Fetches the zip at runtime via WinHTTP, then extracts.</td></tr>
+    <tr><td><code>wistribute-offline.exe</code></td><td><span class="tag">EMBEDDED</span></td>
+        <td>Zip baked into the exe via C23 <code>#embed</code>. Fully offline.</td></tr>
+    </table>
+</div>
+
+<h2>Stack</h2>
+<ul>
+    <li><strong>C23</strong> (mingw-w64 GCC ≥ 15 — needed for <code>#embed</code>)</li>
+    <li><strong>WinHTTP</strong> for HTTPS (TLS via Schannel) — no libcurl, no OpenSSL</li>
+    <li><strong>miniz</strong> (vendored at build time) for ZIP extraction</li>
+    <li><strong>Win32</strong> for the GUI (<code>msctls_progress32</code> + <code>IFileOpenDialog</code>)</li>
+</ul>
+
+<h2>Tested binary sizes</h2>
+<table>
+<tr><th>Binary</th><th>Size</th><th>External DLLs required</th></tr>
+<tr><td><code>wistribute.exe</code></td><td>~212 KB</td>
+    <td>None — only Windows system DLLs</td></tr>
+<tr><td><code>wistribute-offline.exe</code></td><td>~30 MB</td>
+    <td>None — only Windows system DLLs (payload-dominated size)</td></tr>
+</table>
+
+<h2>Where to go next</h2>
+<ul>
+    <li><a href="build.html">Build</a> — CMake (primary) and GNU Make</li>
+    <li><a href="usage.html">Usage</a> — CLI flags, GUI behaviour</li>
+    <li><a href="architecture.html">Architecture</a> — module boundaries, threading, security</li>
+    <li><a href="plans/">Plans</a> — preserved planning history</li>
+</ul>
+
+<footer>Project at <code>c:/code/wistribute</code>. Documentation built as static HTML.</footer>
+</div>
+</body>
+</html>

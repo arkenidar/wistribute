@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — wistribute</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="wrap">
+<nav class="top">
+    <a class="brand" href="index.html">wistribute</a>
+    <a href="index.html">Overview</a>
+    <a href="build.html">Build</a>
+    <a href="usage.html">Usage</a>
+    <a class="active" href="architecture.html">Architecture</a>
+    <a href="plans/">Plans</a>
+</nav>
+
+<h1>Architecture</h1>
+<p class="lede">Five small C files. One I/O thread, one UI thread.
+No third-party runtime dependencies.</p>
+
+<h2>Modules</h2>
+<table>
+<tr><th>File</th><th>Responsibility</th><th>Key API</th></tr>
+<tr><td><code>src/main.c</code></td>
+    <td>Entry point, arg parsing, CLI/GUI dispatch, console attach</td>
+    <td><code>wmain</code>, <code>run_cli</code></td></tr>
+<tr><td><code>src/http.c</code></td>
+    <td>WinHTTP download into a malloc'd buffer with progress callback</td>
+    <td><code>http_get</code></td></tr>
+<tr><td><code>src/unzip.c</code></td>
+    <td>miniz wrapper: extract zip-in-memory to a directory; path-traversal guard</td>
+    <td><code>unzip_buffer</code></td></tr>
+<tr><td><code>src/gui.c</code></td>
+    <td>Win32 window, progress bar, folder picker, worker thread, completion UX</td>
+    <td><code>gui_run</code></td></tr>
+<tr><td><code>src/embed.c</code></td>
+    <td>EMBEDDED only — exposes the C23 <code>#embed</code>'d zip bytes</td>
+    <td><code>zbs_zip_data</code>, <code>zbs_zip_size</code></td></tr>
+</table>
+
+<h2>Build-mode switches</h2>
+<p>One source tree, two compile-time variants selected by <code>-D</code>:</p>
+<table>
+<tr><th>Define</th><th>Compiles in</th><th>Links</th></tr>
+<tr><td><code>MODE_DOWNLOAD</code></td><td><code>http.c</code></td><td><code>winhttp</code></td></tr>
+<tr><td><code>MODE_EMBEDDED</code></td><td><code>embed.c</code> (with <code>#embed</code>)</td><td>—</td></tr>
+</table>
+<p>Both modes share <code>main.c</code>, <code>unzip.c</code>, and <code>gui.c</code>.</p>
+
+<h2>Data flow</h2>
+<pre><code>            ┌──────────────┐
+            │   wmain      │ parses argv, picks CLI vs GUI
+            └──────┬───────┘
+        CLI       │       GUI
+        ┌────────▼┐    ┌──▼──────┐
+        │ run_cli │    │ gui_run │  WM_CREATE → controls
+        └────┬────┘    └────┬────┘
+             │              │ Start clicked → CreateThread
+             │              ▼
+             │       ┌────────────┐
+             │       │ worker     │ runs in background
+             │       │  thread    │
+             │       └────┬───────┘
+             │            │ posts WM_APP_PROGRESS / _STATUS / _DONE
+             │            │
+        ┌────▼────────────▼─────────┐
+        │ http_get  (DOWNLOAD only) │  WinHTTP → malloc'd buffer
+        └─────────────┬─────────────┘
+                      │
+                      ▼
+        ┌───────────────────────────┐
+        │ unzip_buffer              │  miniz, walks entries, CreateFileW
+        │  + path-traversal guard   │
+        └───────────────────────────┘</code></pre>
+
+<h2>Threading model (GUI)</h2>
+<ul>
+    <li>UI thread owns all window handles; never blocks.</li>
+    <li><strong>Start</strong> creates one worker thread (<code>CreateThread</code>) running
+        download → extract.</li>
+    <li>Worker communicates back via <code>PostMessageW</code> only — no shared mutable state:
+        <ul>
+            <li><code>WM_APP+1</code> — progress percentage in <code>wParam</code></li>
+            <li><code>WM_APP+2</code> — strdup'd status text in <code>lParam</code></li>
+            <li><code>WM_APP+3</code> — completion; <code>wParam</code> = return code</li>
+        </ul>
+    </li>
+    <li>On <code>WM_APP+3</code> the UI updates a <code>STATE_DONE_OK / _ERR</code> flag and
+        either relabels <strong>Start → Close</strong> or re-enables for retry.</li>
+</ul>
+
+<h2>Security notes</h2>
+<ul>
+    <li><code>unzip_buffer</code> rejects entries with absolute paths, drive letters,
+        or any <code>..</code> component before opening any file
+        (<code>path_is_safe</code> in <code>src/unzip.c</code>).</li>
+    <li>HTTPS is enforced when the URL is <code>https://</code>; certificate validation
+        is delegated to Schannel via WinHTTP defaults.</li>
+    <li>Manifest sets <code>requestedExecutionLevel = asInvoker</code> — no UAC prompt.</li>
+    <li>Manifest's <code>activeCodePage = UTF-8</code> ensures any narrow-API path
+        handling round-trips Unicode filenames cleanly.</li>
+</ul>
+
+<h2>Manifest &amp; resources</h2>
+<p><code>res/wistribute.rc</code> embeds <code>res/wistribute.manifest</code> as
+resource type 24, ID 1 — the Win32 application-manifest convention.
+Effects:</p>
+<ul>
+    <li>Common Controls v6 → themed (XP-style) progress bar</li>
+    <li>UTF-8 active code page</li>
+    <li>Marked compatible with Windows 8.1 / 10 / 11</li>
+</ul>
+
+<h2>Vendored dependencies</h2>
+<table>
+<tr><th>Lib</th><th>Source</th><th>Vendored at</th></tr>
+<tr><td>miniz <code>3.1.1</code></td>
+    <td>Release-zip from <code>github.com/richgel999/miniz</code></td>
+    <td>build-time fetch (CMake or Make)</td></tr>
+</table>
+<p>No git submodule; no source tree pollution; one-shot fetch is cached
+under <code>build/_deps/</code>.</p>
+
+<footer><a href="index.html">← Back to overview</a></footer>
+</div>
+</body>
+</html>

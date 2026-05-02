@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usage — wistribute</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="wrap">
+<nav class="top">
+    <a class="brand" href="index.html">wistribute</a>
+    <a href="index.html">Overview</a>
+    <a href="build.html">Build</a>
+    <a class="active" href="usage.html">Usage</a>
+    <a href="architecture.html">Architecture</a>
+    <a href="plans/">Plans</a>
+</nav>
+
+<h1>Usage</h1>
+<p class="lede">One exe, two surfaces. Double-click for a GUI; run from a
+shell for CLI output.</p>
+
+<h2>Synopsis</h2>
+<pre><code>wistribute.exe [--cli] [--gui] [--out DIR] [--url URL] [-h|--help]</code></pre>
+
+<h2>Flags</h2>
+<table>
+<tr><th>Flag</th><th>Effect</th></tr>
+<tr><td><code>--cli</code></td><td>Force CLI mode even when no console is attached</td></tr>
+<tr><td><code>--gui</code></td><td>Force the GUI window even from a console</td></tr>
+<tr><td><code>--out DIR</code></td><td>Extraction destination (default: current working directory)</td></tr>
+<tr><td><code>--url URL</code></td><td>Override the download URL (DOWNLOAD build only)</td></tr>
+<tr><td><code>-h</code>, <code>--help</code></td><td>Print usage and exit</td></tr>
+</table>
+
+<h2>Mode selection</h2>
+<p>The exe decides between CLI and GUI based on how it was launched:</p>
+<table>
+<tr><th>Launched from</th><th>Default mode</th></tr>
+<tr><td>Double-click in Explorer</td><td>GUI</td></tr>
+<tr><td><code>cmd.exe</code> / PowerShell / shell</td><td>CLI</td></tr>
+<tr><td>With <code>--cli</code></td><td>CLI (always)</td></tr>
+<tr><td>With <code>--gui</code></td><td>GUI (always)</td></tr>
+</table>
+<p>When invoked from a shell, the exe re-attaches to the parent console
+via <code>AttachConsole(ATTACH_PARENT_PROCESS)</code> so progress and
+errors appear inline, not in a popped-up window.</p>
+
+<h2>CLI</h2>
+<p>Progress is printed to <code>stderr</code> as a percentage / byte count
+that updates in place via carriage return:</p>
+<pre><code>&gt; wistribute.exe --cli --out C:\tmp\zbs
+download  87%  (4194304 / 4823211)
+extract   100%  (1842 / 1842)
+done. extracted to C:\tmp\zbs</code></pre>
+<p>Exit code <code>0</code> on success, non-zero (Win32 error code or
+miniz error) on failure.</p>
+
+<h2>GUI</h2>
+<p>The window contains:</p>
+<ul>
+    <li>URL field (read-only and labelled <em>(embedded payload)</em> in offline builds)</li>
+    <li>Output path field + <strong>Browse…</strong> (modern <code>IFileOpenDialog</code> folder picker)</li>
+    <li>Themed progress bar (Common Controls v6 — comes from the embedded manifest)</li>
+    <li>Status line</li>
+    <li><strong>Start</strong> button (default; activatable with <kbd>Enter</kbd>)</li>
+</ul>
+
+<h3>Completion behaviour</h3>
+<table>
+<tr><th>Outcome</th><th>What changes in the window</th></tr>
+<tr><td>Success</td>
+    <td>Status: <em>"Done — you can close this window."</em><br>
+        <strong>Start</strong> relabels to <strong>Close</strong>; focus moves to it.<br>
+        <kbd>Enter</kbd> or click closes the app.</td></tr>
+<tr><td>Failure</td>
+    <td>Status: <em>"Download failed."</em> or <em>"Extraction failed."</em><br>
+        Buttons re-enable; user can retry.</td></tr>
+</table>
+
+<h2>Examples</h2>
+<pre><code># Download into a specific directory
+wistribute.exe --cli --out D:\tools\zbs
+
+# Use a custom mirror
+wistribute.exe --cli --url https://my.mirror/zbs.zip --out D:\tools\zbs
+
+# Force the GUI from a shell
+wistribute.exe --gui
+
+# Offline build — payload is embedded
+wistribute-offline.exe --cli --out D:\tools\zbs</code></pre>
+
+<footer><a href="index.html">← Back to overview</a></footer>
+</div>
+</body>
+</html>

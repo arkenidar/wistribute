@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build — wistribute</title>
+<link rel="stylesheet" href="_style.css">
+</head>
+<body>
+<div class="wrap">
+<nav class="top">
+    <a class="brand" href="index.html">wistribute</a>
+    <a href="index.html">Overview</a>
+    <a class="active" href="build.html">Build</a>
+    <a href="usage.html">Usage</a>
+    <a href="architecture.html">Architecture</a>
+    <a href="plans/">Plans</a>
+</nav>
+
+<h1>Build</h1>
+<p class="lede">Two parallel build systems — CMake (primary) and GNU Make
+(mirror). Both produce identical binaries, both auto-fetch
+<code>miniz</code> and the embedded payload zip at configure/build time.</p>
+
+<h2>Prerequisites</h2>
+<ul>
+    <li>Windows x64</li>
+    <li>mingw-w64 GCC ≥ 15 (for C23 <code>#embed</code>) — confirmed working with <code>15.2.0</code> from MSYS2</li>
+    <li><code>windres</code> from binutils (manifest compilation)</li>
+    <li>CMake ≥ 3.20 <em>or</em> GNU Make 4.x</li>
+    <li>Network access at first configure (one-shot fetch of miniz + payload)</li>
+</ul>
+
+<h2>CMake (recommended)</h2>
+<pre><code>cmake -S . -B build -G Ninja
+cmake --build build</code></pre>
+<p>Outputs land in <code>build/wistribute.exe</code> and
+<code>build/wistribute-offline.exe</code>.</p>
+
+<h3>Useful options</h3>
+<table>
+<tr><th>Option</th><th>Default</th><th>Purpose</th></tr>
+<tr><td><code>WISTRIBUTE_BUILD_DOWNLOAD</code></td><td>ON</td><td>Build the download-mode exe</td></tr>
+<tr><td><code>WISTRIBUTE_BUILD_EMBEDDED</code></td><td>ON</td><td>Build the offline exe (downloads payload at configure time)</td></tr>
+<tr><td><code>ZBS_URL</code></td><td>ZeroBraneStudio master.zip</td><td>Override the embedded source zip URL</td></tr>
+<tr><td><code>MINIZ_TAG</code></td><td><code>3.1.1</code></td><td>miniz release tag to vendor</td></tr>
+</table>
+<pre><code>cmake -S . -B build -DWISTRIBUTE_BUILD_EMBEDDED=OFF
+cmake -S . -B build -DZBS_URL=https://example.com/your.zip</code></pre>
+
+<h2>GNU make (mirror)</h2>
+<p>Same flags, libs, and vendored deps as the CMake path. Convenient inside
+an MSYS2 / mingw shell.</p>
+<pre><code>make            # builds both
+make download   # only wistribute.exe
+make embedded   # only wistribute-offline.exe
+make clean      # remove build/
+make distclean  # remove build/ and payload/</code></pre>
+
+<h2>What gets fetched at build time</h2>
+<table>
+<tr><th>Artifact</th><th>Source</th><th>Cached at</th></tr>
+<tr><td>miniz amalgamation</td>
+    <td><code>github.com/richgel999/miniz/releases/.../miniz-3.1.1.zip</code></td>
+    <td><code>build/_deps/miniz/</code></td></tr>
+<tr><td>Embedded payload</td>
+    <td><code>github.com/pkulchenko/ZeroBraneStudio/.../master.zip</code></td>
+    <td><code>build/_deps/payload/zbs.zip</code> (CMake) or <code>payload/zbs.zip</code> (Make)</td></tr>
+</table>
+
+<h2>Verifying the binary is self-contained</h2>
+<pre><code>objdump -p build/wistribute.exe | grep -i "DLL Name"</code></pre>
+<p>Expected output (only Windows system DLLs):</p>
+<pre><code>COMCTL32.dll
+GDI32.dll
+KERNEL32.dll
+msvcrt.dll
+ole32.dll
+SHELL32.dll
+USER32.dll
+WINHTTP.dll</code></pre>
+<p>The offline exe omits <code>WINHTTP.dll</code>.</p>
+
+<h2>Compile flags</h2>
+<table>
+<tr><th>Flag</th><th>Why</th></tr>
+<tr><td><code>-std=c23</code></td><td>Enables <code>#embed</code> directive</td></tr>
+<tr><td><code>-municode</code></td><td>Use <code>wmain</code> + UTF-16 entry point</td></tr>
+<tr><td><code>-mwindows</code></td><td>GUI subsystem (no console pop-up on double-click)</td></tr>
+<tr><td><code>-s</code></td><td>Strip symbols at link time</td></tr>
+<tr><td><code>-Wno-unused-function</code></td><td>Silences miniz.h's static-inline noise</td></tr>
+</table>
+
+<footer><a href="index.html">← Back to overview</a></footer>
+</div>
+</body>
+</html>
