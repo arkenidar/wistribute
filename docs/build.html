@@ -24,8 +24,9 @@
 
 <h2>Prerequisites</h2>
 <ul>
-    <li>Windows x64</li>
-    <li>mingw-w64 GCC ≥ 15 (for C23 <code>#embed</code>) — confirmed working with <code>15.2.0</code> from MSYS2</li>
+    <li>Windows x64 (native or Wine), or any mingw-w64 cross toolchain</li>
+    <li>mingw-w64 GCC — ≥ 15 for C23 <code>#embed</code>; older GCC (e.g. 14) is fine and uses the generated-array fallback</li>
+    <li><code>xxd</code> (vim-common) when the embedded payload uses the byte-array fallback</li>
     <li><code>windres</code> from binutils (manifest compilation)</li>
     <li>CMake ≥ 3.20 <em>or</em> GNU Make 4.x</li>
     <li>Network access at first configure (one-shot fetch of miniz + payload)</li>
@@ -56,6 +57,23 @@ make download   # only wistribute.exe
 make embedded   # only wistribute-offline.exe
 make clean      # remove build/
 make distclean  # remove build/ and payload/</code></pre>
+
+<h2>Cross-build for Wine on Debian</h2>
+<p>No MSYS2 needed — Debian's mingw-w64 cross-compiler builds Win64 exes
+directly and Wine runs them:</p>
+<pre><code>cmake -S . -B build-w64 -G Ninja \
+  -DCMAKE_SYSTEM_NAME=Windows \
+  -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+  -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres
+cmake --build build-w64</code></pre>
+<p>Debian packages: <code>gcc-mingw-w64-x86-64-posix</code>,
+<code>ninja-build</code>, <code>wine</code>, <code>xxd</code>
+(vim-common), plus network at first configure.</p>
+<pre><code>wine build-w64/wistribute-offline.exe --cli --out 'C:\zbs'</code></pre>
+<p>Debian's mingw-w64 GCC is 14, which lacks C23 <code>#embed</code>;
+the build generates the embedded payload as a byte array via
+<code>xxd -i</code> instead. On GCC ≥ 15 / Clang ≥ 19 the native
+<code>#embed</code> path is used automatically.</p>
 
 <h2>What gets fetched at build time</h2>
 <table>
