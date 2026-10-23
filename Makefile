@@ -60,9 +60,14 @@ $(BUILD)/wistribute.exe: $(COMMON_SRC) src/http.c $(MINIZ_OBJ) $(RES_OBJ) | $(BU
 	    $(COMMON_SRC) src/http.c $(MINIZ_OBJ) $(RES_OBJ) \
 	    -o $@ $(LDFLAGS) $(COMMON_LIBS) -lwinhttp
 
+# --- fallback byte-array include (compilers without C23 #embed) --------------
+$(BUILD)/zbs_zip.inc: $(PAYLOAD) | $(BUILD)
+	@cd $(dir $(PAYLOAD)) && xxd -i -n ZBS_ZIP $(notdir $(PAYLOAD)) \
+	    | sed '1s/^unsigned char /static const unsigned char /' > $(abspath $@)
+
 # --- embedded-mode exe -------------------------------------------------------
-$(BUILD)/wistribute-offline.exe: $(COMMON_SRC) src/embed.c $(MINIZ_OBJ) $(PAYLOAD) $(RES_OBJ) | $(BUILD)
-	$(CC) $(CSTD) $(CFLAGS) $(DEFINES) -DMODE_EMBEDDED $(INCLUDES) \
+$(BUILD)/wistribute-offline.exe: $(COMMON_SRC) src/embed.c $(MINIZ_OBJ) $(PAYLOAD) $(RES_OBJ) $(BUILD)/zbs_zip.inc | $(BUILD)
+	$(CC) $(CSTD) $(CFLAGS) $(DEFINES) -DMODE_EMBEDDED $(INCLUDES) -I$(BUILD) \
 	    $(COMMON_SRC) src/embed.c $(MINIZ_OBJ) $(RES_OBJ) \
 	    -o $@ $(LDFLAGS) $(COMMON_LIBS)
 

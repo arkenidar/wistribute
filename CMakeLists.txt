@@ -98,8 +98,27 @@ if(WISTRIBUTE_BUILD_EMBEDDED)
     file(MAKE_DIRECTORY "${EMBED_SRC_DIR}")
     configure_file("${CMAKE_SOURCE_DIR}/src/embed.c" "${EMBED_SRC_DIR}/embed.c" COPYONLY)
 
+    # Fallback byte-array include for compilers without C23 #embed (e.g.
+    # mingw-w64 GCC < 15). Generated with `xxd -i` under a deterministic
+    # symbol name; embed.c #includes it only when #embed is unavailable.
+    find_program(WISTRIBUTE_XXD xxd)
+    if(NOT WISTRIBUTE_XXD)
+        message(FATAL_ERROR "xxd is required to embed the payload (install vim-common)")
+    endif()
+    execute_process(
+        COMMAND "${WISTRIBUTE_XXD}" -i -n ZBS_ZIP zbs.zip
+        WORKING_DIRECTORY "${EMBED_PAYLOAD_DIR}"
+        RESULT_VARIABLE _xxd_rc
+        OUTPUT_VARIABLE _xxd_out
+        ERROR_QUIET)
+    if(NOT _xxd_rc EQUAL 0)
+        message(FATAL_ERROR "xxd failed to generate the embedded payload array")
+    endif()
+    string(REGEX REPLACE "^unsigned char " "static const unsigned char " _xxd_out "${_xxd_out}")
+    file(WRITE "${EMBED_SRC_DIR}/zbs_zip.inc" "${_xxd_out}")
+
     add_executable(wistribute-offline WIN32 ${COMMON_SRC} "${EMBED_SRC_DIR}/embed.c")
-    target_include_directories(wistribute-offline PRIVATE ${COMMON_INCLUDES})
+    target_include_directories(wistribute-offline PRIVATE ${COMMON_INCLUDES} "${EMBED_SRC_DIR}")
     target_link_libraries(wistribute-offline PRIVATE wistribute_flags ${COMMON_LIBS})
     target_compile_definitions(wistribute-offline PRIVATE MODE_EMBEDDED)
 endif()
