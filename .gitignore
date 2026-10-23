@@ -1,5 +1,6 @@
 # build outputs
 /build/
+/build-w64/
 /payload/
 
 # editor / OS

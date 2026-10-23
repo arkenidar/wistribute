@@ -1,4 +1,24 @@
 cmake_minimum_required(VERSION 3.20)
+
+# On a non-Windows host, auto-select a mingw-w64 cross toolchain when one is
+# available, so the plain `cmake -S . -B build -G Ninja` from the README
+# cross-builds a Windows .exe (e.g. Debian with gcc-mingw-w64-x86-64-posix
+# installed). An explicit toolchain file or `-DCMAKE_SYSTEM_NAME=Windows` /
+# `-DCMAKE_C_COMPILER=...` / `-DCMAKE_RC_COMPILER=...` always takes precedence.
+if(NOT WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    find_program(WISTRIBUTE_MINGW_CC
+        NAMES x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gcc-posix)
+    if(WISTRIBUTE_MINGW_CC)
+        set(CMAKE_SYSTEM_NAME "Windows" CACHE STRING "" FORCE)
+        set(CMAKE_SYSTEM_PROCESSOR "x86_64" CACHE STRING "" FORCE)
+        set(CMAKE_C_COMPILER "${WISTRIBUTE_MINGW_CC}" CACHE FILEPATH "" FORCE)
+        find_program(WISTRIBUTE_MINGW_RC NAMES x86_64-w64-mingw32-windres)
+        if(WISTRIBUTE_MINGW_RC)
+            set(CMAKE_RC_COMPILER "${WISTRIBUTE_MINGW_RC}" CACHE FILEPATH "" FORCE)
+        endif()
+    endif()
+endif()
+
 project(wistribute LANGUAGES C)
 
 set(CMAKE_C_STANDARD 23)
@@ -6,7 +26,14 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
 if(NOT WIN32)
-    message(FATAL_ERROR "wistribute targets Win64 only.")
+    message(FATAL_ERROR
+        "wistribute targets Windows only. "
+        "On Linux, cross-build with: "
+        "cmake -S . -B build-w64 -G Ninja "
+        "-DCMAKE_SYSTEM_NAME=Windows "
+        "-DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc "
+        "-DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres "
+        "(install gcc-mingw-w64-x86-64-posix).")
 endif()
 
 # --- options -----------------------------------------------------------------
